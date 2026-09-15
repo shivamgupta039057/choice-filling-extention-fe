@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "MCC Choice Helper",
+  "version": "1.0.0",
+  "description": "Credit-based MCC choice filling helper.",
+  "permissions": ["activeTab", "storage", "scripting", "clipboardWrite"],
+  "host_permissions": [
+    "https://mcc.admissions.nic.in/*",
+    "http://localhost:8080/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
+  ],
+  "action": {
+    "default_title": "MCC Choice Helper",
+    "default_popup": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mcc.admissions.nic.in/*",
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
