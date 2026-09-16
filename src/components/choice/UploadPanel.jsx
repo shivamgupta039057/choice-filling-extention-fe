@@ -1,32 +1,14 @@
-import { useDispatch, useSelector } from "react-redux";
-import {
-  controlFilling,
-  copyReport,
-  openHelperTab,
-  parseFile,
-  previewChoices,
-  selectFillableBeforeBlock,
-  setSetting,
-  skipBlockedChoice,
-  startFilling
-} from "../../features/helper/helperSlice";
 import StatGrid from "../common/StatGrid";
 
-const UploadPanel = () => {
-  const dispatch = useDispatch();
-  const helper = useSelector((state) => state.helper);
-  const fillableBeforeBlock = useSelector(selectFillableBeforeBlock);
-
+const   UploadPanel = ({ helper, actions }) => {
   const pauseDisabled = !helper.jobState.running || helper.jobState.paused;
   const resumeDisabled = !helper.jobState.running || !helper.jobState.paused;
   const stopDisabled = !helper.jobState.running;
   const startDisabled = !helper.previewApproved || helper.loading === "start" || helper.jobState.running;
   const skipDisabled = helper.jobState.running || !helper.firstBlockingMatch;
-  const startText = helper.previewApproved ? `Fill first ${fillableBeforeBlock}` : "Start filling";
+  const startText = helper.previewApproved ? `Fill first ${helper.fillableBeforeBlock}` : "Start filling";
 
-  const update = (key) => (event) => {
-    dispatch(setSetting({ key, value: event.target.value }));
-  };
+  const update = (key) => (event) => actions.updateSetting(key, event.target.value);
 
   return (
     <section className="panel">
@@ -36,7 +18,7 @@ const UploadPanel = () => {
         <input
           type="file"
           accept=".xlsx,.csv,.tsv,text/csv"
-          onChange={(event) => dispatch(parseFile(event.target.files?.[0]))}
+          onChange={(event) => actions.uploadFile(event.target.files?.[0])}
         />
       </label>
 
@@ -71,14 +53,14 @@ const UploadPanel = () => {
       />
 
       <div className="actions">
-        <button type="button" onClick={() => dispatch(previewChoices())} disabled={helper.loading === "preview"}>Preview</button>
-        <button type="button" className="primary" disabled={startDisabled} onClick={() => dispatch(startFilling())}>{startText}</button>
-        <button type="button" disabled={pauseDisabled} onClick={() => dispatch(controlFilling("MCC_PAUSE_FILLING"))}>Pause</button>
-        <button type="button" disabled={resumeDisabled} onClick={() => dispatch(controlFilling("MCC_RESUME_FILLING"))}>Resume</button>
-        <button type="button" disabled={skipDisabled} onClick={() => dispatch(skipBlockedChoice())}>Skip blocked choice</button>
-        <button type="button" className="danger" disabled={stopDisabled} onClick={() => dispatch(controlFilling("MCC_STOP_FILLING"))}>Stop</button>
-        <button type="button" onClick={() => dispatch(openHelperTab())}>Open helper tab</button>
-        <button type="button" disabled={!helper.importReport && !helper.matches.length} onClick={() => dispatch(copyReport())}>Copy report</button>
+        <button type="button" onClick={actions.previewChoices} disabled={helper.loading === "preview"}>Preview</button>
+        <button type="button" className="primary" disabled={startDisabled} onClick={actions.startFilling}>{startText}</button>
+        <button type="button" disabled={pauseDisabled} onClick={() => actions.controlFilling("MCC_PAUSE_FILLING")}>Pause</button>
+        <button type="button" disabled={resumeDisabled} onClick={() => actions.controlFilling("MCC_RESUME_FILLING")}>Resume</button>
+        <button type="button" disabled={skipDisabled} onClick={actions.skipBlockedChoice}>Skip blocked choice</button>
+        <button type="button" className="danger" disabled={stopDisabled} onClick={() => actions.controlFilling("MCC_STOP_FILLING")}>Stop</button>
+        <button type="button" onClick={actions.openHelperTab}>Open helper tab</button>
+        <button type="button" disabled={!helper.importReport && !helper.matches.length} onClick={actions.copyReport}>Copy report</button>
       </div>
     </section>
   );

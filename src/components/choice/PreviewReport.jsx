@@ -1,9 +1,5 @@
-import { useSelector } from "react-redux";
-import { selectOrderedMatches } from "../../features/helper/helperSlice";
-
-const PreviewReport = () => {
-  const helper = useSelector((state) => state.helper);
-  const orderedMatches = useSelector(selectOrderedMatches);
+const PreviewReport = ({ helper }) => {
+  const orderedMatches = orderMatches(helper.matches);
   const skipped = helper.importReport?.skipped || [];
 
   return (
@@ -17,13 +13,21 @@ const PreviewReport = () => {
           </li>
         )) : null}
         {!orderedMatches.length && helper.importReport && !skipped.length ? (
-          <li className="skip">Excel rows loaded. Open the MCC/Rajasthan choice page and click Preview to check matches.</li>
+          <li className="skip">Excel rows loaded. Open the MCC choice page and click Preview to check matches.</li>
         ) : null}
         {orderedMatches.map((item) => <PreviewItem item={item} key={`${item.rank}-${item.excelRow}-${item.reason || "ok"}`} />)}
       </ol>
     </section>
   );
 };
+
+function orderMatches(matches) {
+  return [
+    ...matches.filter(({ found, duplicate }) => !found && !duplicate),
+    ...matches.filter(({ duplicate }) => duplicate),
+    ...matches.filter(({ found }) => found)
+  ];
+}
 
 const PreviewItem = ({ item }) => {
   const choiceQuota = item.quota ? ` | ${item.quota}` : "";

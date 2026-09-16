@@ -1,9 +1,11 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { fetchAccount } from "../../features/account/accountSlice";
-import { login, signup } from "../../features/auth/authSlice";
+import { API_ENDPOINTS } from "../../constant/apiendpoints";
 import { ROUTES_CONST } from "../../constant/routeConstant";
+import { saveAuth, setAuth, setAuthStatus } from "../../features/auth/authSlice";
+import { Apiservice } from "../../services/apiservices";
 
 const LoginForm = () => {
   const dispatch = useDispatch();
@@ -12,18 +14,42 @@ const LoginForm = () => {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState(auth.user?.email || "");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = async (event) => {
+  const submitHandler = async (event) => {
     event.preventDefault();
-    const action = mode === "signup" ? signup : login;
+
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      toast.error("Enter email and password.");
+      return;
+    }
 
     try {
-      await dispatch(action({ email, password })).unwrap();
-      setPassword("");
-      dispatch(fetchAccount());
-      navigate(ROUTES_CONST.HOME, { replace: true });
-    } catch {
-      // The slice already stores the visible error message.
+      setLoading(true);
+      dispatch(setAuthStatus(mode === "signup" ? "Creating account..." : "Logging in..."));
+
+      const endpoint = mode === "signup" ? API_ENDPOINTS.auth.signup : API_ENDPOINTS.auth.login;
+      const res = await Apiservice.post(endpoint, {
+        email: normalizedEmail,
+        password
+      });
+
+      const token = res?.data?.token;
+      const user = res?.data?.user;
+
+      if (token && user) {
+        saveAuth({ token, user });
+        dispatch(setAuth({ token, user }));
+        setPassword("");
+        toast.success(res?.data?.message || "Logged in successfully.");
+        navigate(ROUTES_CONST.HOME, { replace: true });
+      }
+    } catch (error) {
+      toast.error(error.message || "Login failed.");
+      dispatch(setAuthStatus(error.message || "Login failed."));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,7 +62,7 @@ const LoginForm = () => {
         </button>
       </div>
 
-      <form onSubmit={submit}>
+      <form onSubmit={submitHandler}>
         <div className="form-grid">
           <label className="field">
             <span>Email</span>
@@ -59,8 +85,8 @@ const LoginForm = () => {
         </div>
 
         <div className="actions single">
-          <button type="submit" className="primary" disabled={auth.loading}>
-            {auth.loading ? "Please wait..." : mode === "signup" ? "Create account" : "Login"}
+          <button type="submit" className="primary" disabled={loading}>
+            {loading ? "Please wait..." : mode === "signup" ? "Create account" : "Login"}
           </button>
         </div>
       </form>

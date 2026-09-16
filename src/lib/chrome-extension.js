@@ -4,6 +4,16 @@ const hasChromeStorage = () => Boolean(chromeApi?.storage?.local);
 const hasChromeTabs = () => Boolean(chromeApi?.tabs);
 const hasChromeRuntime = () => Boolean(chromeApi?.runtime);
 
+console.log("chromeApichromeApichromeApichromeApichromeApi" , chromeApi);
+
+console.log("hasChromeRuntimehasChromeRuntimehasChromeRuntimehasChromeRuntime" , {
+  hasChromeStorage,
+  hasChromeTabs,
+  hasChromeRuntime
+
+});
+
+
 export const getFromStorage = async (key) => {
   if (hasChromeStorage()) return chromeApi.storage.local.get([key]);
 
