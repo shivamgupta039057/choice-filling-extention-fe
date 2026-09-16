@@ -1,20 +1,22 @@
-import React from 'react'
-import { Routes } from 'react-router-dom'
-import Protected from './ProtectedRoutes'
+import { Navigate, Route, Routes } from "react-router-dom";
+import { ROUTES_CONST } from "../constant/routeConstant";
+import ProtectedRoute from "./ProtectedRoutes";
+import DashboardPage from "../pages/DashboardPage";
+import LoginPage from "../pages/LoginPage";
 
-const Route = () => {
-  return (
-     <>
-       <Routes>
-        <Route
-              key={item?.path}
-              path={item?.path}
-              element={<Protected Component={item?.component} />}
-            />
+const AppRoutes = () => (
+  <Routes>
+    <Route path={ROUTES_CONST.LOGIN} element={<LoginPage />} />
+    <Route
+      path={ROUTES_CONST.HOME}
+      element={(
+        <ProtectedRoute>
+          <DashboardPage />
+        </ProtectedRoute>
+      )}
+    />
+    <Route path="*" element={<Navigate to={ROUTES_CONST.HOME} replace />} />
+  </Routes>
+);
 
-       </Routes>
-    </>
-  )
-}
-
-export default Route
+export default AppRoutes;

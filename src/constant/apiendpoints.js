@@ -1,9 +1,18 @@
-  const apiEndPoints = {
+export const API_ENDPOINTS = {
   auth: {
-    login: '/auth/login',
-    getprofile : '/auth/profile',
-    createGymOwner : '/auth/gym-owners',
-    listGymOwners : '/auth/gym-owners',
-    renewGymOwner : '/auth/gym-owners',
+    login: "/auth/login",
+    signup: "/auth/signup"
   },
-}
+  user: {
+    me: "/me"
+  },
+  uploads: {
+    parse: "/uploads/parse"
+  },
+  payments: {
+    packages: "/payments/packages",
+    orders: "/payments/orders"
+  }
+};
+
+export const apiEndPoints = API_ENDPOINTS;

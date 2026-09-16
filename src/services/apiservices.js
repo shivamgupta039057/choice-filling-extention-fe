@@ -1,159 +1,122 @@
 import axios from "axios";
-import toast from "react-hot-toast";
+import { API_ENDPOINTS } from "../constant/apiendpoints";
 
+export const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
+export const cleanApiUrl = (value) => String(value || DEFAULT_API_URL).replace(/\/+$/, "");
 
-const baseurl = "https://api.nutsfresco.com/api/v1";
-export const imgBaseUrl = "https://api.nutsfresco.com";
+export const apiBaseUrl = (apiUrl) => cleanApiUrl(apiUrl).replace(/\/api$/, "");
 
-console.log("baseurl", baseurl);
+const buildApiError = (response) => {
+  const message = response.status === 402
+    ? "No credits left. Renew credits from the extension."
+    : response.data?.error || response.data?.message || "Backend request failed.";
+
+  const error = new Error(message);
+  error.status = response.status;
+  error.data = response.data;
+  return error;
+};
+
+export const createApiClient = ({ apiUrl = DEFAULT_API_URL, token = "" } = {}) => {
+  const client = axios.create({
+    baseURL: cleanApiUrl(apiUrl),
+    validateStatus: () => true
+  });
+
+  client.interceptors.request.use((config) => {
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
+  client.interceptors.response.use((response) => {
+    if (response.status < 400 && response.data?.success !== false) {
+      return response;
+    }
+
+    throw buildApiError(response);
+  });
+
+  return client;
+};
 
 export const Apiservice = {
-    get: async (endpoint) => {
-        try {
-            const res = await axios.get(baseurl + endpoint);
+  get: (endpoint, apiUrl = DEFAULT_API_URL) => createApiClient({ apiUrl }).get(endpoint),
 
-            if (res.data.success === false) {
-                toast.error(res.data.message);
-                return res;
-            }
+  getAuth: (endpoint, token, apiUrl = DEFAULT_API_URL) =>
+    createApiClient({ apiUrl, token }).get(endpoint),
 
-            return res;
-        } catch (error) {
-            toast.error(error?.message);
-        }
-    },
+  post: (endpoint, body, apiUrl = DEFAULT_API_URL) =>
+    createApiClient({ apiUrl }).post(endpoint, body),
 
-    getAuth: async (endpoint, token) => {
-        try {
-            const res = await axios.get(baseurl + endpoint, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
+  postAuth: (endpoint, body, token, apiUrl = DEFAULT_API_URL) =>
+    createApiClient({ apiUrl, token }).post(endpoint, body),
 
-            if (res.data.success === false) {
-                toast.error(res.data.message);
-                return res;
-            }
+  patchAuth: (endpoint, body, token, apiUrl = DEFAULT_API_URL) =>
+    createApiClient({ apiUrl, token }).patch(endpoint, body),
 
-            return res;
-        } catch (error) {
-            throw error;
-        }
-    },
+  postAPIAuthFormData: (endpoint, body, token, apiUrl = DEFAULT_API_URL) =>
+    createApiClient({ apiUrl, token }).post(endpoint, body),
 
-    post: async (endpoint, body) => {
-        try {
-            const res = await axios.post(baseurl + endpoint, body);
+  postAPI: (endpoint, body, apiUrl = DEFAULT_API_URL) =>
+    createApiClient({ apiUrl }).post(endpoint, body)
+};
 
-            if (res.data.success === false) {
-                toast.error(res.data.message);
-                return res;
-            }
+export const loginUser = async ({ apiUrl, email, password }) => {
+  const { data } = await Apiservice.post(API_ENDPOINTS.auth.login, {
+    email,
+    password
+  }, apiUrl);
 
-            return res;
-        } catch (error) {
-            toast.error(
-                error?.response?.data?.message || error?.message
-            );
+  return data;
+};
 
-            return undefined;
-        }
-    },
+export const signupUser = async ({ apiUrl, email, password }) => {
+  const { data } = await Apiservice.post(API_ENDPOINTS.auth.signup, {
+    email,
+    password
+  }, apiUrl);
 
-    postAuth: async (endpoint, body, token) => {
-        try {
-            const res = await axios.post(
-                baseurl + endpoint,
-                body,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+  return data;
+};
 
-            console.log(
-                "ffffffffffresresresresres",
-                res
-            );
+export const getAccount = async (auth) => {
+  const { data } = await Apiservice.getAuth(API_ENDPOINTS.user.me, auth.token, auth.apiUrl);
+  return data;
+};
 
-            if (res.data.success === false) {
-                return res;
-            }
+export const getCreditPackages = async (apiUrl) => {
+  const { data } = await Apiservice.get(API_ENDPOINTS.payments.packages, apiUrl);
+  return Array.isArray(data?.packages) ? data.packages : [];
+};
 
-            toast.success(res.data.message);
+export const createPaymentOrder = async ({ auth, packageId }) => {
+  const { data } = await Apiservice.postAuth(
+    API_ENDPOINTS.payments.orders,
+    { packageId },
+    auth.token,
+    auth.apiUrl
+  );
 
-            return res;
-        } catch (error) {
-            throw error;
-        }
-    },
+  return data;
+};
 
-    patchAuth: async (endpoint, body, token) => {
-        try {
-            const res = await axios.patch(
-                baseurl + endpoint,
-                body,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+export const parsePriorityFile = async ({ auth, file, sheet, headerRow, column, programColumn }) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("sheet", sheet || "");
+  formData.append("headerRow", headerRow || "1");
+  formData.append("column", column || "");
+  formData.append("programColumn", programColumn || "");
 
-            if (res.data.success === false) {
-                return res;
-            }
+  const { data } = await Apiservice.postAPIAuthFormData(
+    API_ENDPOINTS.uploads.parse,
+    formData,
+    auth.token,
+    auth.apiUrl
+  );
 
-            toast.success(res.data.message);
-
-            return res;
-        } catch (error) {
-            throw error;
-        }
-    },
-
-    postAPIAuthFormData: async (endpoint, body, token) => {
-        try {
-            const res = await axios.post(
-                baseurl + endpoint,
-                body,
-                {
-                    headers: {
-                        "Content-Type": "multipart/form-data",
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
-
-            if (res.data.success === false) {
-                toast.error(res.data.message);
-                return res;
-            }
-
-            return res;
-        } catch (error) {
-            throw error;
-        }
-    },
-
-    postAPI: async (endpoint, body) => {
-        try {
-            const res = await axios.post(
-                "https://ecommerce.imgglobal.in/backend/" + endpoint,
-                body
-            );
-
-            if (res.data.success === false) {
-                toast.error(res.data.message);
-                return res;
-            }
-
-            return res;
-        } catch (error) {
-            toast.error(error?.message);
-        }
-    },
+  return data;
 };

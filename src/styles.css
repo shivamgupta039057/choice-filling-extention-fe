@@ -60,6 +60,7 @@ input[type="email"],
 input[type="password"],
 input[type="text"],
 input[type="number"],
+input:not([type]),
 select {
   width: 100%;
   min-height: 42px;
@@ -70,7 +71,6 @@ select {
   color: #172026;
 }
 
-.auth-box,
 .panel {
   border: 1px solid #d8e0e6;
   border-radius: 8px;
@@ -79,16 +79,10 @@ select {
   background: #fff;
 }
 
-.auth-grid,
-.auth-actions,
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-}
-
-.auth-actions {
-  margin-top: 8px;
 }
 
 .stats {
@@ -127,8 +121,44 @@ select {
   margin-top: 10px;
 }
 
+.actions.single {
+  grid-template-columns: 1fr;
+}
+
 .actions button:last-child {
   grid-column: 1 / -1;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.header-actions button {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.link-button {
+  min-height: 32px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #0b7894;
+}
+
+.empty-state {
+  min-height: 180px;
+  display: grid;
+  place-content: center;
+  text-align: center;
 }
 
 button {

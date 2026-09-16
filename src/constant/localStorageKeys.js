@@ -1,6 +1,13 @@
-const localStorageKeys = {
-    token:"jwt-token",
-    role:"user-role"
-}
+export const STORAGE_KEYS = {
+  auth: "choiceFillingHelperAuth",
+  helper: "choiceFillingHelperState",
+  priorityItems: "priorityItems"
+};
 
-export default localStorageKeys
+const localStorageKeys = {
+  ...STORAGE_KEYS,
+  token: "jwt-token",
+  user: "choice-helper-user"
+};
+
+export default localStorageKeys;

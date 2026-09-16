@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "MCC Choice Helper",
+  "name": "Choice Filling Helper",
   "version": "1.0.0",
-  "description": "Credit-based MCC choice filling helper.",
+  "description": "Credit-based medical choice filling helper.",
   "permissions": ["activeTab", "storage", "scripting", "clipboardWrite"],
   "host_permissions": [
     "https://mcc.admissions.nic.in/*",
@@ -11,7 +11,7 @@
     "http://127.0.0.1:*/*"
   ],
   "action": {
-    "default_title": "MCC Choice Helper",
+    "default_title": "Choice Filling Helper",
     "default_popup": "index.html"
   },
   "content_scripts": [
