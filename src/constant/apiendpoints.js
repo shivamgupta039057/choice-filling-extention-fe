@@ -11,7 +11,8 @@ export const API_ENDPOINTS = {
   },
   payments: {
     packages: "/payments/packages",
-    orders: "/payments/orders"
+    orders: "/payments/orders",
+    orderStatus: (orderId) => `/payments/orders/${orderId}/status`
   }
 };
 

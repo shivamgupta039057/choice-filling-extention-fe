@@ -14,16 +14,20 @@ import { openTab } from "../lib/chrome-extension";
 import { useChoiceHelper } from "../hooks/useChoiceHelper";
 import { apiBaseUrl, Apiservice } from "../services/apiservices";
 
+const PENDING_PAYMENT_ORDER_KEY = "mcc-choice-helper-pending-payment-order";
+
 const DashboardPage = () => {
   const dispatch = useDispatch();
   const auth = useSelector((state) => state.auth);
-  console.log("authauthauthauthauthauth" ,  auth);
   
   const [uploads, setUploads] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [packages, setPackages] = useState([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [pendingPaymentOrderId, setPendingPaymentOrderId] = useState(() =>
+    localStorage.getItem(PENDING_PAYMENT_ORDER_KEY) || ""
+  );
 
   const refreshAccount = async () => {
     if (!auth.token) return;
@@ -64,6 +68,44 @@ const DashboardPage = () => {
     dispatch(setAuthenticatedUser(user));
   };
 
+  const savePendingPaymentOrder = (orderId) => {
+    if (!orderId) return;
+    localStorage.setItem(PENDING_PAYMENT_ORDER_KEY, orderId);
+    setPendingPaymentOrderId(orderId);
+  };
+
+  const clearPendingPaymentOrder = () => {
+    localStorage.removeItem(PENDING_PAYMENT_ORDER_KEY);
+    setPendingPaymentOrderId("");
+  };
+
+  const checkPaymentStatus = async (orderId, { quiet = false } = {}) => {
+    if (!auth.token || !orderId) return;
+
+    try {
+      const res = await Apiservice.getAuth(
+        API_ENDPOINTS.payments.orderStatus(orderId),
+        auth.token,
+        auth.apiUrl
+      );
+      const data = res?.data || {};
+
+      if (data.status === "paid") {
+        clearPendingPaymentOrder();
+        setPaymentStatus(`Payment successful. ${data.creditsPurchased || ""} credits added.`);
+        toast.success("Payment successful. Credits added.");
+        await refreshAccount();
+        return;
+      }
+
+      setPaymentStatus("Payment is still pending. Complete Razorpay checkout.");
+    } catch (error) {
+      if (!quiet) {
+        setPaymentStatus(error.message || "Could not check payment status.");
+      }
+    }
+  };
+
   const buyCredits = async (packageId) => {
     try {
       setPaymentLoading(true);
@@ -79,9 +121,10 @@ const DashboardPage = () => {
       const order = res?.data || {};
       const checkoutUrl = order.checkoutUrl || `${apiBaseUrl(auth.apiUrl)}/api/payments/checkout/${order.orderId}`;
 
+      savePendingPaymentOrder(order.orderId);
       openTab(checkoutUrl);
-      setPaymentStatus("Payment opened in a new tab. Click Refresh after payment.");
-      toast.success("Payment opened. Click Refresh after payment.");
+      setPaymentStatus("Payment opened in a new tab. Credits will refresh after successful payment.");
+      toast.success("Payment opened.");
     } catch (error) {
       setPaymentStatus(error.message || "Could not create payment order.");
       toast.error(error.message || "Could not create payment order.");
@@ -95,13 +138,24 @@ const DashboardPage = () => {
     onCreditsUpdate: updateCreditsAfterUpload,
     onRefreshAccount: refreshAccount
   });
-
-  console.log("helperhelperhelperhelperhelper" , helper , actions);
   
 
   useEffect(() => {
     refreshAll();
   }, [auth.token]);
+
+  useEffect(() => {
+    if (!auth.token || !pendingPaymentOrderId) return undefined;
+
+    setPaymentStatus("Checking pending payment...");
+    checkPaymentStatus(pendingPaymentOrderId, { quiet: true });
+
+    const intervalId = window.setInterval(() => {
+      checkPaymentStatus(pendingPaymentOrderId, { quiet: true });
+    }, 4000);
+
+    return () => window.clearInterval(intervalId);
+  }, [auth.token, auth.apiUrl, pendingPaymentOrderId]);
 
   return (
     <AppShell onRefresh={refreshAll}>

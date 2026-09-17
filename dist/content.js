@@ -569,6 +569,11 @@ function normalizeQuota(value) {
 }
 
 function isGenericPlaceName(value) {
+  const original = String(value || "");
+  if (/\b(college|medical|institute|hospital|university|aiims|jipmer|gmc|mc)\b/i.test(original)) {
+    return false;
+  }
+
   const text = normalizeMedical(value);
   if (!text) return false;
   const genericPlaces = new Set([

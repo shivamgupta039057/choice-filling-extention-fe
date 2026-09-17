@@ -5,7 +5,7 @@ const CreditPackages = ({ packages, paymentLoading, status, onBuyCredits }) => (
       {packages.length ? packages.map((item) => (
         <button type="button" key={item.id} onClick={() => onBuyCredits(item.id)} disabled={paymentLoading}>
           <span>{item.label}: {item.credits} credits</span>
-          <span>INR {item.amountPaise / 100}</span>
+          <span>{paymentLoading ? "Opening..." : `INR ${item.amountPaise / 100}`}</span>
         </button>
       )) : <p>No credit packages available.</p>}
     </div>
