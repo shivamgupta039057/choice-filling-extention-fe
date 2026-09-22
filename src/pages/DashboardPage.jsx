@@ -19,6 +19,9 @@ const PENDING_PAYMENT_ORDER_KEY = "mcc-choice-helper-pending-payment-order";
 const DashboardPage = () => {
   const dispatch = useDispatch();
   const auth = useSelector((state) => state.auth);
+
+  console.log("authauthauthauth" , auth);
+  
   
   const [uploads, setUploads] = useState([]);
   const [transactions, setTransactions] = useState([]);
