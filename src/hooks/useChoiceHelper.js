@@ -128,6 +128,7 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
       }
 
       onRefreshAccount();
+      await sendPriorityMessage("MCC_PREVIEW_CHOICES", "preview", nextHelper);
     } catch (error) {
       setHelper((current) => ({
         ...current,
@@ -206,9 +207,9 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
     setHelper(restored);
   }
 
-  async function sendPriorityMessage(type, loading) {
-    if (!helper.priorityItems.length) {
-      toast.error(helper.importReport ? "No choices loaded from this sheet." : "Upload a sheet first.");
+  async function sendPriorityMessage(type, loading, sourceHelper = helper) {
+    if (!sourceHelper.priorityItems.length) {
+      toast.error(sourceHelper.importReport ? "No choices loaded from this sheet." : "Upload a sheet first.");
       return;
     }
 
@@ -225,12 +226,12 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
       await injectContentScript(tab.id);
       const response = await sendTabMessage(tab.id, {
         type,
-        priorityItems: helper.priorityItems,
-        skippedRanks: helper.skippedRanks
+        priorityItems: sourceHelper.priorityItems,
+        skippedRanks: sourceHelper.skippedRanks
       });
 
       const result = { matches: [], added: 0, errors: [], ...response };
-      const nextHelper = applyPageResult({ ...helper, loading: "idle" }, type, result);
+      const nextHelper = applyPageResult({ ...sourceHelper, loading: "idle" }, type, result);
       setHelper(nextHelper);
       await persistHelper(nextHelper);
     } catch (error) {
@@ -244,8 +245,8 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
           loading: "idle",
           previewApproved: false,
           matchValue: "0",
-          matches: pageUnavailableMatches(current.priorityItems, reason),
-          firstBlockingMatch: current.priorityItems[0] || null,
+          matches: pageUnavailableMatches(sourceHelper.priorityItems, reason),
+          firstBlockingMatch: sourceHelper.priorityItems[0] || null,
           status: `${reason} Loaded rows are shown as not found until page preview can run.`
         };
       });
@@ -371,8 +372,14 @@ function fallbackPreviewMessage(matches) {
 function importReportText(items, report) {
   if (!report) return `${items.length} priority rows loaded.`;
   const skippedCount = report.skipped?.length || 0;
+  const fallbackCount = Number(report.instituteFallbackRowCount || 0);
+  const recoveredCount = Number(report.instituteRecoveredRowCount || 0);
+  const looseRecoveredCount = Number(report.instituteLooseRecoveredRowCount || 0);
   const columnText = `Institute col ${report.instituteColumnLabel}, Program col ${report.programColumnLabel}, Quota col ${report.quotaColumnLabel}, Order ${report.orderColumnLabel}`;
-  return `${items.length} choices loaded from ${report.dataRowCount} data rows. ${columnText}. ${skippedCount} skipped.`;
+  const fallbackText = fallbackCount ? ` ${fallbackCount} rows auto-corrected from nearby institute cells.` : "";
+  const recoveredText = recoveredCount ? ` ${recoveredCount} rows recovered from full row text.` : "";
+  const looseRecoveredText = looseRecoveredCount ? ` ${looseRecoveredCount} rows recovered with loose text fallback.` : "";
+  return `${items.length} choices loaded from ${report.dataRowCount} data rows. ${columnText}.${fallbackText}${recoveredText}${looseRecoveredText} ${skippedCount} skipped.`;
 }
 
 function buildReportLines(helper) {
@@ -387,6 +394,15 @@ function buildReportLines(helper) {
     lines.push(`Data rows: ${importReport.dataRowCount}`);
     lines.push(`Loaded choices: ${priorityItems.length}`);
     lines.push(`Institute column: ${importReport.instituteColumnLabel}`);
+    if (Number(importReport.instituteFallbackRowCount || 0)) {
+      lines.push(`Institute row auto-corrections: ${importReport.instituteFallbackRowCount}`);
+    }
+    if (Number(importReport.instituteRecoveredRowCount || 0)) {
+      lines.push(`Institute row recoveries: ${importReport.instituteRecoveredRowCount}`);
+    }
+    if (Number(importReport.instituteLooseRecoveredRowCount || 0)) {
+      lines.push(`Institute loose recoveries: ${importReport.instituteLooseRecoveredRowCount}`);
+    }
     lines.push(`Program column: ${importReport.programColumnLabel}`);
     lines.push(`Quota column: ${importReport.quotaColumnLabel}`);
     lines.push(`Order column: ${importReport.orderColumnLabel}`);

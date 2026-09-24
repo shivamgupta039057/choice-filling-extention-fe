@@ -1,13 +1,13 @@
-const CreditPackages = ({ packages, paymentLoading, status, onBuyCredits }) => (
+const CreditPackages = ({ packages, paymentLoading, status, onOpenPlans }) => (
   <section className="panel">
-    <h2>Renew credits</h2>
-    <div className="package-list">
-      {packages.length ? packages.map((item) => (
-        <button type="button" key={item.id} onClick={() => onBuyCredits(item.id)} disabled={paymentLoading}>
-          <span>{item.label}: {item.credits} credits</span>
-          <span>{paymentLoading ? "Opening..." : `INR ${item.amountPaise / 100}`}</span>
-        </button>
-      )) : <p>No credit packages available.</p>}
+    <div className="section-heading">
+      <div>
+        <h2>Renew credits</h2>
+        <p>Open upgrade plans and add credits with Razorpay.</p>
+      </div>
+      <button type="button" className="primary" onClick={onOpenPlans} disabled={paymentLoading || !packages.length}>
+        {paymentLoading ? "Opening..." : "Upgrade Plans"}
+      </button>
     </div>
     {status ? <p className="status">{status}</p> : null}
   </section>

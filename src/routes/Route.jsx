@@ -3,6 +3,7 @@ import { ROUTES_CONST } from "../constant/routeConstant";
 import ProtectedRoute from "./ProtectedRoutes";
 import DashboardPage from "../pages/DashboardPage";
 import LoginPage from "../pages/LoginPage";
+import ProfilePage from "../pages/ProfilePage";
 
 const AppRoutes = () => (
   <Routes>
@@ -12,6 +13,14 @@ const AppRoutes = () => (
       element={(
         <ProtectedRoute>
           <DashboardPage />
+        </ProtectedRoute>
+      )}
+    />
+    <Route
+      path={ROUTES_CONST.PROFILE}
+      element={(
+        <ProtectedRoute>
+          <ProfilePage />
         </ProtectedRoute>
       )}
     />

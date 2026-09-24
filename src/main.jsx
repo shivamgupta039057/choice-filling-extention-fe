@@ -7,6 +7,9 @@ import App from "./app/App";
 import { store } from "./app/store";
 import "./styles.css";
 
+const surface = new URLSearchParams(window.location.search).get("surface") || "extension";
+document.documentElement.dataset.surface = surface;
+
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <Provider store={store}>

@@ -1,14 +1,47 @@
 (() => {
 if (window.__choiceFillingHelperListener) {
-  chrome.runtime.onMessage.removeListener(window.__choiceFillingHelperListener);
+  try {
+    chrome.runtime.onMessage.removeListener(window.__choiceFillingHelperListener);
+  } catch {
+    // The extension was reloaded while this page was still open.
+  }
 }
 
 const BUTTON_TEXT = /^add$/i;
 const MCC_HOST = "mcc.admissions.nic.in";
 const ADD_DELAY_MS = 3000;
+const HELPER_PANEL_ID = "mcc-choice-helper-panel";
+const HELPER_LAUNCHER_ID = "mcc-choice-helper-launcher";
+const HELPER_FRAME_ID = "mcc-choice-helper-frame";
+const PLAN_MODAL_ID = "mcc-choice-helper-plan-modal";
 let fillJob = null;
 
+function hasLiveExtensionContext() {
+  try {
+    return Boolean(chrome?.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+function getExtensionUrl(path) {
+  try {
+    if (!hasLiveExtensionContext()) return "";
+    return chrome.runtime.getURL(path);
+  } catch {
+    return "";
+  }
+}
+
 window.__choiceFillingHelperListener = (message, sender, sendResponse) => {
+  if (message.type === "MCC_TOGGLE_HELPER_PANEL") {
+    sendResponse(toggleHelperPanel());
+    return true;
+  }
+  if (message.type === "MCC_CLOSE_HELPER_PANEL") {
+    sendResponse(closeHelperPanel());
+    return true;
+  }
   if (message.type === "MCC_PREVIEW_CHOICES") {
     sendResponse(previewChoices(message.priorityItems || [], message.skippedRanks || []));
     return true;
@@ -40,7 +73,511 @@ window.__choiceFillingHelperListener = (message, sender, sendResponse) => {
   return false;
 };
 
-chrome.runtime.onMessage.addListener(window.__choiceFillingHelperListener);
+if (hasLiveExtensionContext()) {
+  chrome.runtime.onMessage.addListener(window.__choiceFillingHelperListener);
+}
+installHelperLauncher();
+window.addEventListener("message", handleHelperFrameMessage);
+window.addEventListener("beforeunload", warnIfFilling);
+
+function installHelperLauncher() {
+  if (!isMcc() || document.getElementById(HELPER_LAUNCHER_ID)) return;
+
+  const launcher = document.createElement("button");
+  launcher.id = HELPER_LAUNCHER_ID;
+  launcher.type = "button";
+  launcher.title = "Open MCC Choice Helper";
+  launcher.innerHTML = "<span>MCC</span><strong>Helper</strong>";
+  launcher.addEventListener("click", () => toggleHelperPanel());
+  document.documentElement.appendChild(launcher);
+  injectHelperChromeStyles();
+}
+
+function toggleHelperPanel() {
+  if (!isMcc()) {
+    return { ok: false, message: "Open the MCC choice filling page to use Choice Helper." };
+  }
+
+  const panel = document.getElementById(HELPER_PANEL_ID);
+  if (panel) {
+    panel.classList.toggle("mcc-helper-panel--open");
+    return { ok: true, open: panel.classList.contains("mcc-helper-panel--open") };
+  }
+
+  openHelperPanel();
+  return { ok: true, open: true };
+}
+
+function openHelperPanel() {
+  injectHelperChromeStyles();
+  const helperUrl = getExtensionUrl("index.html?surface=page-panel#/");
+
+  const panel = document.createElement("aside");
+  panel.id = HELPER_PANEL_ID;
+  panel.className = "mcc-helper-panel mcc-helper-panel--open";
+  panel.innerHTML = `
+    <div class="mcc-helper-panel__topbar">
+      <div>
+        <strong>MCC Choice Helper</strong>
+        <span>Credits, upload, preview and filling controls</span>
+      </div>
+      <button type="button" class="mcc-helper-panel__close" aria-label="Close Choice Helper">×</button>
+    </div>
+    ${helperUrl
+      ? `<iframe id="${HELPER_FRAME_ID}" title="MCC Choice Helper" src="${helperUrl}"></iframe>`
+      : `<div class="mcc-helper-panel__invalid">
+          <strong>Extension was reloaded</strong>
+          <span>Refresh this MCC page once, then open MCC Choice Helper again.</span>
+        </div>`}
+  `;
+
+  panel.querySelector(".mcc-helper-panel__close").addEventListener("click", closeHelperPanel);
+  document.documentElement.appendChild(panel);
+}
+
+function closeHelperPanel() {
+  const panel = document.getElementById(HELPER_PANEL_ID);
+  if (panel) panel.remove();
+  removeHostPlanModal(false);
+  return { ok: true, open: false };
+}
+
+function handleHelperFrameMessage(event) {
+  const frame = document.getElementById(HELPER_FRAME_ID);
+  if (!frame || event.source !== frame.contentWindow) return;
+
+  const message = event.data || {};
+  if (message.type === "MCC_SHOW_PLAN_MODAL") {
+    renderHostPlanModal(message.payload || {});
+  }
+  if (message.type === "MCC_HIDE_PLAN_MODAL") {
+    removeHostPlanModal(false);
+  }
+}
+
+function renderHostPlanModal(payload) {
+  removeHostPlanModal(false);
+  injectHelperChromeStyles();
+
+  const packages = Array.isArray(payload.packages) ? payload.packages : [];
+  const features = Array.isArray(payload.features) && payload.features.length
+    ? payload.features
+    : ["Priority file upload", "MCC page preview", "Choice filling controls", "Credit ledger and upload history"];
+  const authenticated = Boolean(payload.authenticated);
+  const paymentLoading = Boolean(payload.paymentLoading);
+
+  const modal = document.createElement("div");
+  modal.id = PLAN_MODAL_ID;
+  modal.innerHTML = `
+    <section class="mcc-plan-dialog" role="dialog" aria-modal="true" aria-label="Upgrade plans">
+      <button type="button" class="mcc-plan-close" aria-label="Close upgrade plans">×</button>
+      <p class="mcc-plan-eyebrow">Upgrade plans</p>
+      <h2>${escapeHtml(payload.title || "Choose the right plan")}</h2>
+      <p class="mcc-plan-subtitle">${escapeHtml(payload.subtitle || "Add credits to your account and continue filling choices.")}</p>
+      <div class="mcc-plan-billing">
+        <span>Credits</span>
+        <strong>Pay as you upload</strong>
+        <em>No monthly lock-in</em>
+      </div>
+      <div class="mcc-plan-grid">
+        ${packages.map((item, index) => `
+          <button type="button" class="mcc-plan-card ${index === 0 ? "mcc-plan-card--popular" : ""}" data-package-id="${escapeAttribute(item.id)}" ${paymentLoading ? "disabled" : ""}>
+            <small>${index === 0 ? "Popular" : escapeHtml(item.label || "Plan")}</small>
+            <span>${escapeHtml(item.label || "Plan")}</span>
+            <strong>INR ${Number(item.amountPaise || 0) / 100}</strong>
+            <em>${Number(item.credits || 0)} credits</em>
+            <b>${authenticated ? "Upgrade Now" : "Login to upgrade"}</b>
+            <ul>${features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join("")}</ul>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+
+  modal.querySelector(".mcc-plan-close").addEventListener("click", () => removeHostPlanModal(true));
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) removeHostPlanModal(true);
+  });
+  modal.querySelectorAll("[data-package-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      postToHelperFrame({ type: "MCC_PLAN_MODAL_PACKAGE_SELECTED", packageId: button.dataset.packageId });
+    });
+  });
+
+  document.documentElement.appendChild(modal);
+}
+
+function removeHostPlanModal(notifyFrame) {
+  const modal = document.getElementById(PLAN_MODAL_ID);
+  if (modal) modal.remove();
+  if (notifyFrame) postToHelperFrame({ type: "MCC_PLAN_MODAL_CLOSED" });
+}
+
+function postToHelperFrame(message) {
+  const frame = document.getElementById(HELPER_FRAME_ID);
+  try {
+    if (frame?.contentWindow) frame.contentWindow.postMessage(message, "*");
+  } catch {
+    // Ignore messages while the helper iframe is being torn down.
+  }
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value).replace(/`/g, "&#096;");
+}
+
+function injectHelperChromeStyles() {
+  if (document.getElementById("mcc-choice-helper-page-styles")) return;
+
+  const style = document.createElement("style");
+  style.id = "mcc-choice-helper-page-styles";
+  style.textContent = `
+    #${HELPER_LAUNCHER_ID} {
+      align-items: center;
+      background: linear-gradient(135deg, #0f766e, #2563eb);
+      border: 0;
+      border-radius: 999px 0 0 999px;
+      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.24);
+      color: #fff;
+      cursor: pointer;
+      display: grid;
+      font: 700 12px/1.1 Arial, sans-serif;
+      gap: 1px;
+      min-height: 56px;
+      padding: 10px 12px;
+      position: fixed;
+      right: 0;
+      top: 170px;
+      width: 72px;
+      z-index: 2147483644;
+    }
+
+    #${HELPER_LAUNCHER_ID} span {
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    #${HELPER_LAUNCHER_ID} strong {
+      font-size: 13px;
+    }
+
+    #${HELPER_PANEL_ID} {
+      background: #eef3f7;
+      border-left: 1px solid rgba(148, 163, 184, .55);
+      box-shadow: -18px 0 48px rgba(15, 23, 42, .22);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      max-width: min(520px, calc(100vw - 28px));
+      position: fixed;
+      right: 0;
+      top: 0;
+      transform: translateX(102%);
+      transition: transform .22s ease;
+      width: 460px;
+      z-index: 2147483645;
+    }
+
+    #${HELPER_PANEL_ID}.mcc-helper-panel--open {
+      transform: translateX(0);
+    }
+
+    .mcc-helper-panel__topbar {
+      align-items: center;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      min-height: 64px;
+      padding: 12px 14px;
+    }
+
+    .mcc-helper-panel__topbar strong,
+    .mcc-helper-panel__topbar span {
+      display: block;
+      font-family: Arial, sans-serif;
+    }
+
+    .mcc-helper-panel__topbar strong {
+      font-size: 15px;
+    }
+
+    .mcc-helper-panel__topbar span {
+      color: #cbd5e1;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .mcc-helper-panel__close {
+      align-items: center;
+      background: rgba(255, 255, 255, .12);
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 999px;
+      color: white;
+      cursor: pointer;
+      display: grid;
+      flex: 0 0 34px;
+      font: 400 24px/1 Arial, sans-serif;
+      height: 34px;
+      place-items: center;
+      width: 34px;
+    }
+
+    #${HELPER_FRAME_ID} {
+      border: 0;
+      height: 100%;
+      width: 100%;
+    }
+
+    .mcc-helper-panel__invalid {
+      align-content: center;
+      color: #111827;
+      display: grid;
+      font-family: Arial, sans-serif;
+      gap: 10px;
+      justify-items: center;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .mcc-helper-panel__invalid strong {
+      font-size: 22px;
+    }
+
+    .mcc-helper-panel__invalid span {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 300px;
+    }
+
+    #${PLAN_MODAL_ID} {
+      align-items: center;
+      background: rgba(15, 23, 42, .56);
+      display: flex;
+      inset: 0;
+      justify-content: center;
+      padding: 28px;
+      position: fixed;
+      z-index: 2147483647;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-dialog {
+      background: #f7f9fc;
+      border: 1px solid rgba(203, 213, 225, .9);
+      border-radius: 24px;
+      box-shadow: 0 28px 80px rgba(15, 23, 42, .34);
+      color: #111827;
+      font-family: Arial, sans-serif;
+      max-height: calc(100vh - 56px);
+      max-width: 1180px;
+      overflow: auto;
+      padding: 30px 28px 28px;
+      position: relative;
+      width: min(1180px, calc(100vw - 56px));
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-close {
+      background: #fff;
+      border: 2px solid #2563eb;
+      border-radius: 999px;
+      color: #1d4ed8;
+      cursor: pointer;
+      font: 400 28px/1 Arial, sans-serif;
+      height: 44px;
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      width: 44px;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-eyebrow {
+      background: #eef2ff;
+      border-radius: 999px;
+      color: #635bff;
+      font: 900 12px/1 Arial, sans-serif;
+      letter-spacing: .18em;
+      margin: 0 auto 18px;
+      padding: 10px 18px;
+      text-align: center;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
+    #${PLAN_MODAL_ID} h2 {
+      font: 900 42px/1.05 Arial, sans-serif;
+      letter-spacing: -1px;
+      margin: 0 54px 10px;
+      text-align: center;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-subtitle {
+      color: #6b7280;
+      font: 700 16px/1.45 Arial, sans-serif;
+      margin: 0 auto 22px;
+      max-width: 520px;
+      text-align: center;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-billing {
+      align-items: center;
+      background: #fff;
+      border-radius: 999px;
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin: 0 auto 28px;
+      max-width: 520px;
+      padding: 12px 16px;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-billing span {
+      color: #94a3b8;
+      font-weight: 900;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-billing strong {
+      background: #eef2ff;
+      border-radius: 999px;
+      color: #4f46e5;
+      padding: 10px 18px;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-billing em {
+      background: #dcfce7;
+      border-radius: 999px;
+      color: #15803d;
+      font-style: normal;
+      font-weight: 900;
+      padding: 9px 14px;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card {
+      align-content: start;
+      background: #fff;
+      border: 1px solid #dbe4ec;
+      border-radius: 20px;
+      cursor: pointer;
+      display: grid;
+      gap: 12px;
+      min-height: 430px;
+      padding: 24px 20px;
+      text-align: left;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card--popular {
+      border-color: #c4b5fd;
+      box-shadow: 0 20px 56px rgba(79, 70, 229, .16);
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card small {
+      background: #eef2ff;
+      border-radius: 999px;
+      color: #635bff;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .14em;
+      padding: 8px 12px;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card span {
+      color: #635bff;
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card strong {
+      color: #111827;
+      font-size: 34px;
+      line-height: 1.05;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card em {
+      color: #64748b;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card b {
+      background: #111827;
+      border-radius: 12px;
+      color: #fff;
+      display: block;
+      font-size: 16px;
+      margin: 8px 0 4px;
+      padding: 13px;
+      text-align: center;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card ul {
+      color: #334155;
+      display: grid;
+      gap: 9px;
+      list-style: none;
+      margin: 4px 0 0;
+      padding: 0;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card li {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    #${PLAN_MODAL_ID} .mcc-plan-card li::before {
+      color: #16a34a;
+      content: "✓ ";
+      font-weight: 900;
+    }
+
+    @media (max-width: 720px) {
+      #${HELPER_PANEL_ID} {
+        max-width: none;
+        width: 100vw;
+      }
+
+      #${PLAN_MODAL_ID} {
+        padding: 14px;
+      }
+
+      #${PLAN_MODAL_ID} .mcc-plan-dialog {
+        width: calc(100vw - 28px);
+      }
+
+      #${PLAN_MODAL_ID} .mcc-plan-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  `;
+  document.documentElement.appendChild(style);
+}
+
+function warnIfFilling(event) {
+  if (!fillJob?.running) return undefined;
+
+  event.preventDefault();
+  event.returnValue = "Choice filling is still running in this tab.";
+  return event.returnValue;
+}
 
 function previewChoices(priorityItems, skippedRanks = []) {
   if (!isMcc()) {
@@ -48,6 +585,14 @@ function previewChoices(priorityItems, skippedRanks = []) {
   }
 
   const rows = getChoiceRows();
+  if (!rows.length) {
+    return unavailablePageResult(
+      priorityItems,
+      skippedRanks,
+      "No MCC choice rows detected on this page. Stay on Choice Filling tab, wait for choices to load, then click Preview."
+    );
+  }
+
   const matches = matchAllChoices(priorityItems, rows);
   const foundCount = matches.filter((item) => item.found).length;
   const skippedSet = rankSet(skippedRanks);
@@ -287,7 +832,7 @@ function getChoiceRows() {
 function structuredChoiceRows(selector, alreadyFilled) {
   return [...document.querySelectorAll(`${selector} tr`)]
     .map((row) => {
-      const button = alreadyFilled ? null : row.querySelector("input.aChoice");
+      const button = alreadyFilled ? null : (row.querySelector("input.aChoice") || findAddButton(row));
       const name = stripActionText(row.querySelector(".instnm"));
       const program = clean(row.querySelector(".brnm")?.textContent);
       const instituteId = clean(row.querySelector(".instcd")?.textContent);
