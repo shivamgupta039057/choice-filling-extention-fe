@@ -1,4 +1,7 @@
 import StatGrid from "../common/StatGrid";
+import { getExtensionUrl } from "../../lib/chrome-extension";
+
+const sampleFileUrl = getExtensionUrl("sample-college-file.xlsx");
 
 const   UploadPanel = ({ helper, actions }) => {
   const pauseDisabled = !helper.jobState.running || helper.jobState.paused;
@@ -14,7 +17,10 @@ const   UploadPanel = ({ helper, actions }) => {
     <section className="panel">
       <h2>Upload priority file</h2>
       <label className="field">
-        <span>Excel / CSV file (uses 1 credit)</span>
+        <span className="field-title">
+          Excel / CSV file (1 credit per new roll number)
+          <a className="sample-download" href={sampleFileUrl} download="college name.xlsx">Download sample file</a>
+        </span>
         <input
           type="file"
           accept=".xlsx,.csv,.tsv,text/csv"

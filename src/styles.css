@@ -88,6 +88,31 @@ p {
   font-weight: 700;
 }
 
+.field-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.sample-download {
+  align-items: center;
+  border: 1px solid rgba(15, 118, 110, .24);
+  border-radius: 8px;
+  color: var(--brand);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 30px;
+  padding: 6px 9px;
+  text-decoration: none;
+}
+
+.sample-download:hover {
+  background: rgba(15, 118, 110, .08);
+}
+
 input[type="file"],
 input[type="email"],
 input[type="password"],

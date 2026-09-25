@@ -10,6 +10,7 @@ if (window.__choiceFillingHelperListener) {
 const BUTTON_TEXT = /^add$/i;
 const MCC_HOST = "mcc.admissions.nic.in";
 const ADD_DELAY_MS = 3000;
+const AUTO_SAVE_BATCH_SIZE = 6;
 const HELPER_PANEL_ID = "mcc-choice-helper-panel";
 const HELPER_LAUNCHER_ID = "mcc-choice-helper-launcher";
 const HELPER_FRAME_ID = "mcc-choice-helper-frame";
@@ -70,6 +71,10 @@ window.__choiceFillingHelperListener = (message, sender, sendResponse) => {
     sendResponse(fillJobStatus());
     return true;
   }
+  if (message.type === "MCC_CANDIDATE_INFO") {
+    sendResponse(getCandidateInfo());
+    return true;
+  }
   return false;
 };
 
@@ -110,7 +115,11 @@ function toggleHelperPanel() {
 
 function openHelperPanel() {
   injectHelperChromeStyles();
-  const helperUrl = getExtensionUrl("index.html?surface=page-panel#/");
+  const candidateInfo = getCandidateInfo();
+  const helperParams = new URLSearchParams({ surface: "page-panel" });
+  if (candidateInfo.rollNumber) helperParams.set("candidateRoll", candidateInfo.rollNumber);
+  if (candidateInfo.candidateName) helperParams.set("candidateName", candidateInfo.candidateName);
+  const helperUrl = getExtensionUrl(`index.html?${helperParams.toString()}#/`);
 
   const panel = document.createElement("aside");
   panel.id = HELPER_PANEL_ID;
@@ -140,6 +149,37 @@ function closeHelperPanel() {
   if (panel) panel.remove();
   removeHostPlanModal(false);
   return { ok: true, open: false };
+}
+
+function getCandidateInfo() {
+  const rollNumber = cleanCandidateValue(
+    document.querySelector("#ctl00_lblroll")?.textContent || findValueAfterLabel(/roll\s*number/i)
+  );
+  const candidateName = cleanCandidateValue(
+    document.querySelector("#ctl00_lblnm")?.textContent || findValueAfterLabel(/^name$/i)
+  );
+
+  return {
+    ok: Boolean(rollNumber),
+    rollNumber,
+    candidateName
+  };
+}
+
+function findValueAfterLabel(labelPattern) {
+  const bodyText = String(document.body?.innerText || "");
+  const lines = bodyText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(/^(.*?):\s*(.+)$/);
+    if (match && labelPattern.test(match[1])) return match[2];
+  }
+
+  return "";
+}
+
+function cleanCandidateValue(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function handleHelperFrameMessage(event) {
@@ -727,6 +767,25 @@ async function runFillJob() {
     fillJob.index += 1;
     fillJob.lastMessage = `Added ${fillJob.added}/${fillJob.total}. Waiting 3 seconds...`;
     await wait(ADD_DELAY_MS);
+
+    if (fillJob.added > 0 && fillJob.added % AUTO_SAVE_BATCH_SIZE === 0) {
+      const saveButton = findSaveAndContinueButton();
+      if (!saveButton) {
+        fillJob.stopped = true;
+        fillJob.firstBlockingMatch = {
+          ...match,
+          found: false,
+          reason: "Save and Continue button was not found after batch fill"
+        };
+        break;
+      }
+
+      markSaveButton(saveButton);
+      fillJob.stopped = true;
+      fillJob.lastMessage = `Auto-clicked Save and Continue after ${fillJob.added} choices. Wait for MCC to save/reload, then start the next batch.`;
+      saveButton.click();
+      break;
+    }
   }
 
   if (!fillJob) return;
@@ -735,6 +794,8 @@ async function runFillJob() {
 
   if (fillJob.stopped && fillJob.firstBlockingMatch) {
     fillJob.lastMessage = `Stopped at rank ${fillJob.firstBlockingMatch.rank}. Added ${fillJob.added}/${fillJob.total}; next choice is not fillable: ${fillJob.firstBlockingMatch.reason || "Not found"}. Review, then save manually.`;
+  } else if (fillJob.stopped && fillJob.lastMessage) {
+    // Keep the batch-save message set before clicking Save and Continue.
   } else if (fillJob.stopped) {
     fillJob.lastMessage = `Stopped after adding ${fillJob.added}/${fillJob.total}.`;
   } else if (fillJob.firstBlockingMatch) {
@@ -920,7 +981,7 @@ function matchMccChoice(choice, rows, usedRows) {
   const second = scored[1];
   const gap = second ? best.score - second.score : 1;
 
-  if (best && best.score >= 0.92 && gap >= 0.08) {
+  if (best && best.score >= 0.82 && gap >= 0.04) {
     return resultFor(choice, best.rowItem, best.score, "");
   }
 
@@ -981,6 +1042,20 @@ function getExistingChoiceCount() {
 function findAddButton(scope) {
   return [...scope.querySelectorAll("button, input[type='button'], input[type='submit'], a")]
     .find((button) => BUTTON_TEXT.test(clean(button.innerText || button.value || button.textContent)));
+}
+
+function findSaveAndContinueButton() {
+  const direct = document.querySelector("#btnSave.clicksave, #btnSave");
+  if (direct && /save\s+and\s+continue/i.test(clean(direct.value || direct.textContent))) return direct;
+
+  return [...document.querySelectorAll("button, input[type='button'], input[type='submit'], a")]
+    .find((button) => /save\s+and\s+continue/i.test(clean(button.innerText || button.value || button.textContent)));
+}
+
+function markSaveButton(button) {
+  if (!button) return;
+  button.style.outline = "3px solid #0f766e";
+  button.style.outlineOffset = "2px";
 }
 
 function parseChoiceNo(row) {
@@ -1052,7 +1127,13 @@ function normalize(value) {
 function normalizeMedical(value) {
   return String(value || "")
     .replace(/\s*Institute Address:\s*[\s\S]*$/i, "")
+    .replace(/\s*\b(formerly|formely)\s+known\s+as\s+[\s\S]*$/i, "")
     .toLowerCase()
+    .replace(/\bcapfims\b/g, "central armed police forces institute medical sciences")
+    .replace(/\baiims\s+capfims\b/g, "central armed police forces institute medical sciences")
+    .replace(/\baiims\s+rewari\b/g, "all india institute medical sciences rewari")
+    .replace(/\bpatliputra medical college\b/g, "shaheed nirmal mahto medical college hospital dhanbad")
+    .replace(/\bchapra saran\b/g, "government medical college chapra saran")
     .replace(/\bmedial\b/g, "medical")
     .replace(/\bmed\b/g, "medical")
     .replace(/\binstitue\b/g, "institute")
@@ -1087,6 +1168,7 @@ function normalizeMedical(value) {
     .replace(/\bs c b\b/g, "srirama chandra bhanja")
     .replace(/\bucms\b/g, "university sciences")
     .replace(/\br g kar\b/g, "radha gobinda kar")
+    .replace(/\b(asola|delhi|haryana|assam|saran|dhanbad|maidangarhi|majra|bhalkhi|hatimutra|majgaon)\b/g, " ")
     .replace(/\b(the|of|and|in|at|for|a|an|college|medical|institute|hospital|government|govt)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();

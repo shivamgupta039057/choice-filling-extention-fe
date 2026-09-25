@@ -14,6 +14,7 @@ import {
 import { Apiservice } from "../services/apiservices";
 
 const emptyJobState = { running: false, paused: false };
+const CURRENT_PARSER_VERSION = "college-recovery-2026-09-24-v2";
 
 const initialHelper = {
   fileName: "",
@@ -99,6 +100,10 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
       formData.append("column", helper.column || "");
       formData.append("programColumn", helper.programColumn || "");
 
+      const candidate = await getMccCandidateInfo();
+      if (candidate.rollNumber) formData.append("candidateRoll", candidate.rollNumber);
+      if (candidate.candidateName) formData.append("candidateName", candidate.candidateName);
+
       const res = await Apiservice.postAPIAuthFormData(API_ENDPOINTS.uploads.parse, formData, auth.token, auth.apiUrl);
       const data = res?.data || {};
       const priorityItems = Array.isArray(data.items) ? data.items : [];
@@ -180,6 +185,21 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
   async function restoreSavedHelper() {
     const data = await getFromStorage(STORAGE_KEYS.helper);
     const saved = data[STORAGE_KEYS.helper] || {};
+    const savedReport = saved.importReport || null;
+
+    const hasOldSkippedReason = (savedReport?.skipped || []).some((item) =>
+      String(item?.reason || "").includes("Institute value is blank or institute column is wrong")
+    );
+
+    if (saved.loadedFromBackend && (savedReport?.parserVersion !== CURRENT_PARSER_VERSION || hasOldSkippedReason)) {
+      await setInStorage({ [STORAGE_KEYS.helper]: null, [STORAGE_KEYS.priorityItems]: null });
+      setHelper({
+        ...initialHelper,
+        status: "Old saved parse data was cleared. Upload the Excel again to fetch all colleges with the latest parser."
+      });
+      return;
+    }
+
     const restored = {
       ...initialHelper,
       fileName: saved.fileName || "",
@@ -189,7 +209,7 @@ export function useChoiceHelper({ auth, onCreditsUpdate, onRefreshAccount }) {
       column: saved.settings?.instituteColumn || saved.column || initialHelper.column,
       programColumn: saved.settings?.programColumn || saved.programColumn || initialHelper.programColumn,
       priorityItems: Array.isArray(saved.priorityItems) ? saved.priorityItems : [],
-      importReport: saved.importReport || null,
+      importReport: savedReport,
       matches: Array.isArray(saved.lastPreviewMatches) ? saved.lastPreviewMatches : [],
       loadedFromBackend: Boolean(saved.loadedFromBackend),
       skippedRanks: Array.isArray(saved.skippedRanks) ? saved.skippedRanks : []
@@ -360,6 +380,37 @@ function pageUnavailableMatches(priorityItems, reason) {
     alreadyFilled: false,
     reason
   }));
+}
+
+async function getMccCandidateInfo() {
+  const urlCandidate = getCandidateInfoFromUrl();
+  if (urlCandidate.rollNumber) return urlCandidate;
+
+  try {
+    const tab = await getActiveTab();
+    if (!tab?.id) return {};
+
+    await injectContentScript(tab.id);
+    const response = await sendTabMessage(tab.id, { type: "MCC_CANDIDATE_INFO" });
+    return {
+      rollNumber: cleanCandidateField(response?.rollNumber),
+      candidateName: cleanCandidateField(response?.candidateName)
+    };
+  } catch {
+    return {};
+  }
+}
+
+function cleanCandidateField(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function getCandidateInfoFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    rollNumber: cleanCandidateField(params.get("candidateRoll")),
+    candidateName: cleanCandidateField(params.get("candidateName"))
+  };
 }
 
 function fallbackPreviewMessage(matches) {

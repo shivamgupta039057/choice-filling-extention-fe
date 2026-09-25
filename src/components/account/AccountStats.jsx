@@ -5,7 +5,7 @@ const AccountStats = ({ credits, uploadCount }) => (
     items={[
       { value: credits ?? "-", label: "credits" },
       { value: uploadCount || 0, label: "uploads" },
-      { value: 1, label: "cost/upload" }
+      { value: 1, label: "cost/new roll" }
     ]}
   />
 );
