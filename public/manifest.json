@@ -6,9 +6,7 @@
   "permissions": ["activeTab", "storage", "scripting", "clipboardWrite"],
   "host_permissions": [
     "https://mcc.admissions.nic.in/*",
-    "http://localhost:8080/*",
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*"
+    "https://api-extension.nutsfresco.com/*"
   ],
   "action": {
     "default_title": "Choice Filling Helper"
@@ -20,18 +18,14 @@
     {
       "resources": ["index.html", "assets/*"],
       "matches": [
-        "https://mcc.admissions.nic.in/*",
-        "http://localhost:*/*",
-        "http://127.0.0.1:*/*"
+        "https://mcc.admissions.nic.in/*"
       ]
     }
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://mcc.admissions.nic.in/*",
-        "http://localhost:*/*",
-        "http://127.0.0.1:*/*"
+        "https://mcc.admissions.nic.in/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

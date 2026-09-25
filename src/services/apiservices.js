@@ -1,7 +1,7 @@
 import axios from "axios";
 import { API_ENDPOINTS } from "../constant/apiendpoints";
 
-export const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+export const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "https://api-extension.nutsfresco.com/api";
 
 export const cleanApiUrl = (value) => String(value || DEFAULT_API_URL).replace(/\/+$/, "");
 

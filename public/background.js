@@ -1,4 +1,4 @@
-const SUPPORTED_PAGE = /^(https:\/\/mcc\.admissions\.nic\.in\/|http:\/\/localhost:|http:\/\/127\.0\.0\.1:)/;
+const SUPPORTED_PAGE = /^https:\/\/mcc\.admissions\.nic\.in\//;
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.action.setBadgeBackgroundColor({ color: "#0f766e" });
