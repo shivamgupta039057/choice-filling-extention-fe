@@ -7,7 +7,7 @@ const PreviewReport = ({ helper }) => {
       <h2>Preview report</h2>
       <p className="status">{helper.status}</p>
       <ol className="preview">
-        {!orderedMatches.length && skipped.length ? skipped.map((item) => (
+        {skipped.length ? skipped.map((item) => (
           <li className="miss" key={`skipped-${item.excelRow}`}>
             Excel row {item.excelRow}: skipped - {item.reason}{item.rowPreview ? `; seen: ${item.rowPreview}` : ""}
           </li>

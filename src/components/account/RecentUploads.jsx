@@ -6,7 +6,12 @@ const RecentUploads = ({ uploads }) => (
     <MiniList
       items={uploads.slice(0, 6)}
       empty="No uploads yet."
-      render={(upload) => [upload.fileName || "Upload", `${upload.choiceCount || 0} choices`]}
+      render={(upload) => [
+        upload.candidateRoll
+          ? `${upload.fileName || "Upload"} - Roll ${upload.candidateRoll}`
+          : upload.fileName || "Upload",
+        `${upload.choiceCount || 0} choices - ${upload.creditsUsed || 0} credit used`
+      ]}
     />
   </section>
 );

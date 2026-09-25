@@ -3,12 +3,10 @@
   "name": "Choice Filling Helper",
   "version": "1.0.0",
   "description": "Credit-based medical choice filling helper.",
-  "permissions": ["activeTab", "storage", "scripting", "clipboardWrite", "sidePanel"],
+  "permissions": ["activeTab", "storage", "scripting", "clipboardWrite"],
   "host_permissions": [
     "https://mcc.admissions.nic.in/*",
-    "http://localhost:8080/*",
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*"
+    "https://api-extension.nutsfresco.com/*"
   ],
   "action": {
     "default_title": "Choice Filling Helper"
@@ -16,15 +14,18 @@
   "background": {
     "service_worker": "background.js"
   },
-  "side_panel": {
-    "default_path": "index.html"
-  },
+  "web_accessible_resources": [
+    {
+      "resources": ["index.html", "assets/*"],
+      "matches": [
+        "https://mcc.admissions.nic.in/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [
-        "https://mcc.admissions.nic.in/*",
-        "http://localhost:*/*",
-        "http://127.0.0.1:*/*"
+        "https://mcc.admissions.nic.in/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

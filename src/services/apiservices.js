@@ -1,7 +1,7 @@
 import axios from "axios";
 import { API_ENDPOINTS } from "../constant/apiendpoints";
 
-export const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+export const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "https://api-extension.nutsfresco.com/api";
 
 export const cleanApiUrl = (value) => String(value || DEFAULT_API_URL).replace(/\/+$/, "");
 
@@ -103,13 +103,15 @@ export const createPaymentOrder = async ({ auth, packageId }) => {
   return data;
 };
 
-export const parsePriorityFile = async ({ auth, file, sheet, headerRow, column, programColumn }) => {
+export const parsePriorityFile = async ({ auth, file, sheet, headerRow, column, programColumn, candidateRoll, candidateName }) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("sheet", sheet || "");
   formData.append("headerRow", headerRow || "1");
   formData.append("column", column || "");
   formData.append("programColumn", programColumn || "");
+  formData.append("candidateRoll", candidateRoll || "");
+  formData.append("candidateName", candidateName || "");
 
   const { data } = await Apiservice.postAPIAuthFormData(
     API_ENDPOINTS.uploads.parse,

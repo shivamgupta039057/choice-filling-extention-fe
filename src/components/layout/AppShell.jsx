@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { clearAuth, removeAuth } from "../../features/auth/authSlice";
 import { ROUTES_CONST } from "../../constant/routeConstant";
 
@@ -26,6 +26,10 @@ const AppShell = ({ children, onRefresh }) => {
           <button type="button" onClick={handleLogout}>Logout</button>
         </div>
       </header>
+      <nav className="shell-tabs" aria-label="Extension pages">
+        <NavLink to={ROUTES_CONST.HOME} end>Home</NavLink>
+        <NavLink to={ROUTES_CONST.PROFILE}>Profile</NavLink>
+      </nav>
       {children}
     </main>
   );
