@@ -783,7 +783,7 @@ async function runFillJob() {
       markSaveButton(saveButton);
       fillJob.stopped = true;
       fillJob.lastMessage = `Auto-clicked Save and Continue after ${fillJob.added} choices. Wait for MCC to save/reload, then start the next batch.`;
-      saveButton.click();
+      clickSaveAndContinueButton(saveButton);
       break;
     }
   }
@@ -1045,11 +1045,28 @@ function findAddButton(scope) {
 }
 
 function findSaveAndContinueButton() {
-  const direct = document.querySelector("#btnSave.clicksave, #btnSave");
+  const direct = document.querySelector("#btnSave.clicksave, #btnSave, input.clicksave[value*='Save']");
   if (direct && /save\s+and\s+continue/i.test(clean(direct.value || direct.textContent))) return direct;
 
   return [...document.querySelectorAll("button, input[type='button'], input[type='submit'], a")]
     .find((button) => /save\s+and\s+continue/i.test(clean(button.innerText || button.value || button.textContent)));
+}
+
+function clickSaveAndContinueButton(button) {
+  if (!button) return;
+
+  const originalConfirm = window.confirm;
+  window.confirm = (message) => {
+    const text = clean(message);
+    if (/save changes in choice/i.test(text) || /do you want to save/i.test(text)) return true;
+    return originalConfirm.call(window, message);
+  };
+
+  try {
+    button.click();
+  } finally {
+    window.confirm = originalConfirm;
+  }
 }
 
 function markSaveButton(button) {
